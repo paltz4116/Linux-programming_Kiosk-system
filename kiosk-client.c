@@ -12,9 +12,9 @@
 #define DEFAULT_PROTOCOL 0
 #define MAXLINE 100
 
+//서버로부터 상품의 수와 키오스크 정보를 받아옴.
 product *readKiosk(int cfd, product *kioskInfo, int *kiosknum)
 {
-    int tmp;
     read(cfd, kiosknum, sizeof(int));
 
     kioskInfo = (product *)malloc((*kiosknum) * sizeof(product));
@@ -39,7 +39,7 @@ int inputNum()
 }
 
 //구매할 상품의 정보를 입력 받고 서버에 전달 후 서버로부터 성공, 실패 여부와 키오스크 정보를 전달받음.
-product *purchaseProduct(product *kioskInfo, int cfd, int kiosknum)
+void purchaseProduct(product *kioskInfo, int cfd, int kiosknum)
 {
     purchase purArr[100];
     int cost, index = 0;
@@ -55,8 +55,6 @@ product *purchaseProduct(product *kioskInfo, int cfd, int kiosknum)
         scanf("%d", &purArr[index].quantity);
         index++;
         printf("구매를 계속 진행 하시겠습니까?(Y/N): ");
-        // fflush(stdin);
-        // rewind(stdin);
         scanf(" %c", &c);
     }
 
@@ -74,14 +72,11 @@ product *purchaseProduct(product *kioskInfo, int cfd, int kiosknum)
     if (kioskErr == true)
     {
         printf("구매 수량 또는 지불 금액으로 인한 오류 발생\n");
-        return kioskInfo;
     }
     else
     {
         printf("구매 성공\n");
         read(cfd, kioskInfo, (kiosknum * sizeof(product)));
-
-        return kioskInfo;
     }
 }
 
@@ -113,8 +108,9 @@ void operateClient()
 
     while (task == 1)
     {
+        read(cfd, kioskInfo, (kiosknum * sizeof(product)));
         printInfo(kioskInfo, kiosknum);
-        kioskInfo = purchaseProduct(kioskInfo, cfd, kiosknum);
+        purchaseProduct(kioskInfo, cfd, kiosknum);
         task = inputNum();
         write(cfd, &task, sizeof(int));
     }
@@ -124,7 +120,6 @@ void operateClient()
     exit(0);
 }
 
-/* 소문자-대문자 변환: 클라이언트 프로그램 */
 int main()
 {
     operateClient();

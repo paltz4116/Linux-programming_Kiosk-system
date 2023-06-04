@@ -65,7 +65,7 @@ product *kioskInformation(product *kioskInfo, int *num)
 }
 
 // 클라이언트로부터 구매할 상품의 정보를 받고, 구매처리를 한 후 성공, 실패 여부를 클라이언트에 전달.
-product *readTaskNum(int cfd, int kfd, product *kioskInfo, product *origin, int kiosknum)
+int readTaskNum(int cfd, int kfd, product *kioskInfo, int kiosknum)
 {
     purchase *purInfo;
     int index, clientCost, i, totalCost = 0;
@@ -92,8 +92,9 @@ product *readTaskNum(int cfd, int kfd, product *kioskInfo, product *origin, int 
         {
             kioskErr = true;
             write(cfd, &kioskErr, sizeof(bool));
+            readFile(kfd, kioskInfo, kiosknum);
 
-            return origin;
+            return -1;
         }
     }
 
@@ -101,21 +102,22 @@ product *readTaskNum(int cfd, int kfd, product *kioskInfo, product *origin, int 
     {
         kioskErr = true;
         write(cfd, &kioskErr, sizeof(bool));
+        readFile(kfd, kioskInfo, kiosknum);
 
-        return origin;
+        return -1;
     }
 
     write(cfd, &kioskErr, sizeof(bool));
     write(cfd, kioskInfo, (kiosknum * sizeof(product)));
     writeFile(kfd, kioskInfo, kiosknum);
 
-    return kioskInfo;
+    return 0;
 }
 
 // 전반적인 서버 동작 관리.
 void operateServer(product *kioskInfo, int kiosknum, char *fileName)
 {
-    int listenfd, kfd, connfd, clientlen, task, tmp;
+    int listenfd, kfd, connfd, clientlen, task;
     char inmsg[MAXLINE], outmsg[MAXLINE];
     struct sockaddr_un serverAddr, clientAddr;
 
@@ -147,8 +149,9 @@ void operateServer(product *kioskInfo, int kiosknum, char *fileName)
             while (task == 1)
             {
                 readFile(kfd, kioskInfo, kiosknum);
+                write(connfd, kioskInfo, (kiosknum * sizeof(product)));
                 printInfo(kioskInfo, kiosknum);
-                kioskInfo = readTaskNum(connfd, kfd, kioskInfo, kioskInfo, kiosknum);
+                readTaskNum(connfd, kfd, kioskInfo, kiosknum);
                 read(connfd, &task, sizeof(int));
             }
 
