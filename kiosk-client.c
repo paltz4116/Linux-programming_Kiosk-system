@@ -3,14 +3,14 @@
 #include <unistd.h>
 #include <signal.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <fcntl.h>
 #include <stdbool.h>
 #include "kiosk.h"
 #define DEFAULT_PROTOCOL 0
 #define MAXLINE 100
-
-int readLine(int fd, char *str);
 
 product *readKiosk(int cfd, product *kioskInfo, int *kiosknum)
 {
@@ -24,6 +24,7 @@ product *readKiosk(int cfd, product *kioskInfo, int *kiosknum)
     return kioskInfo;
 }
 
+//수행할 작업번호 입력 받은 후 반환.
 int inputNum()
 {
     int task;
@@ -37,18 +38,7 @@ int inputNum()
     return task;
 }
 
-void printInfo(product *kioskInfo, int num)
-{
-    int i, task;
-
-    printf("\n");
-    printf("%-7s %-7s %-7s %-7s\n", "번호", "이름", "가격", "수량");
-    for (i = 0; i < num; i++)
-    {
-        printf("%-4d %-7s %-7d %-7d\n", i + 1, kioskInfo[i].name, kioskInfo[i].cost, kioskInfo[i].quantity);
-    }
-}
-
+//구매할 상품의 정보를 입력 받고 서버에 전달 후 서버로부터 성공, 실패 여부와 키오스크 정보를 전달받음.
 product *purchaseProduct(product *kioskInfo, int cfd, int kiosknum)
 {
     purchase purArr[100];
@@ -89,12 +79,13 @@ product *purchaseProduct(product *kioskInfo, int cfd, int kiosknum)
     else
     {
         printf("구매 성공\n");
-        read(cfd, kioskInfo, ((kiosknum) * sizeof(product)));
+        read(cfd, kioskInfo, (kiosknum * sizeof(product)));
 
         return kioskInfo;
     }
 }
 
+//전반적인 클라이언트 동작 관리.
 void operateClient()
 {
     int cfd, result, kiosknum, task;
@@ -123,7 +114,7 @@ void operateClient()
     while (task == 1)
     {
         printInfo(kioskInfo, kiosknum);
-        purchaseProduct(kioskInfo, cfd, kiosknum);
+        kioskInfo = purchaseProduct(kioskInfo, cfd, kiosknum);
         task = inputNum();
         write(cfd, &task, sizeof(int));
     }

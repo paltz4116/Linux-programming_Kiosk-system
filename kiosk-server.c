@@ -5,16 +5,44 @@
 #include <signal.h>
 #include <ctype.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <fcntl.h>
 #include <stdbool.h>
 #include "kiosk.h"
 #define DEFAULT_PROTOCOL 0
 #define MAXLINE 100
 
-int readLine(int fd, char *str);
-void toUpper(char *in, char *out);
+int createFile(int kfd, char *fileName)
+{
+    if ((kfd = open(fileName, O_RDWR | O_CREAT | O_TRUNC, 0640)) == -1)
+    {
+        perror("createFile error");
+        exit(1);
+    }
+    return kfd;
+}
 
+// 파일에 상품 정보 저장.
+int writeFile(int kfd, product *kioskInfo, int kiosknum)
+{
+    int value;
+    lseek(kfd, 0, SEEK_SET);
+    value = write(kfd, kioskInfo, (kiosknum * sizeof(product)));
+    return value;
+}
+
+// 파일 상품 정보 읽기.
+int readFile(int kfd, product *kioskInfo, int kiosknum)
+{
+    int value;
+    lseek(kfd, 0, SEEK_SET);
+    value = read(kfd, kioskInfo, (kiosknum * sizeof(product)));
+    return value;
+}
+
+// 서버를 시작할때 키오스크의 정보를 동적으로 받는다.
 product *kioskInformation(product *kioskInfo, int *num)
 {
     int i;
@@ -36,7 +64,8 @@ product *kioskInformation(product *kioskInfo, int *num)
     return kioskInfo;
 }
 
-product *readTaskNum(int cfd, product *kioskInfo, product *origin, int kiosknum)
+// 클라이언트로부터 구매할 상품의 정보를 받고, 구매처리를 한 후 성공, 실패 여부를 클라이언트에 전달.
+product *readTaskNum(int cfd, int kfd, product *kioskInfo, product *origin, int kiosknum)
 {
     purchase *purInfo;
     int index, clientCost, i, totalCost = 0;
@@ -52,7 +81,7 @@ product *readTaskNum(int cfd, product *kioskInfo, product *origin, int kiosknum)
     {
         int num = purInfo[i].num - 1;
         int quantity = purInfo[i].quantity;
-        int tmpCost = kioskInfo[num].cost * kioskInfo[num].quantity;
+        int tmpCost = kioskInfo[num].cost * quantity;
 
         if ((kioskInfo[num].quantity - quantity) >= 0 && (totalCost + tmpCost) <= clientCost)
         {
@@ -77,18 +106,23 @@ product *readTaskNum(int cfd, product *kioskInfo, product *origin, int kiosknum)
     }
 
     write(cfd, &kioskErr, sizeof(bool));
-    write(cfd, kioskInfo, ((kiosknum) * sizeof(product)));
+    write(cfd, kioskInfo, (kiosknum * sizeof(product)));
+    writeFile(kfd, kioskInfo, kiosknum);
 
     return kioskInfo;
 }
 
-void operateServer(product *kioskInfo, int kiosknum)
+// 전반적인 서버 동작 관리.
+void operateServer(product *kioskInfo, int kiosknum, char *fileName)
 {
-    int listenfd, connfd, clientlen, task;
+    int listenfd, kfd, connfd, clientlen, task, tmp;
     char inmsg[MAXLINE], outmsg[MAXLINE];
     struct sockaddr_un serverAddr, clientAddr;
 
     printf("서버 시작\n");
+    kfd = createFile(kfd, fileName); // 상품 정보를 저장하는 파일 생성.
+    writeFile(kfd, kioskInfo, kiosknum);
+
     signal(SIGCHLD, SIG_IGN);
     clientlen = sizeof(clientAddr);
 
@@ -105,13 +139,16 @@ void operateServer(product *kioskInfo, int kiosknum)
         connfd = accept(listenfd, (struct sockaddr *)&clientAddr, &clientlen);
         if (fork() == 0)
         {
+            readFile(kfd, kioskInfo, kiosknum);
             write(connfd, &kiosknum, sizeof(kiosknum));
             write(connfd, kioskInfo, (kiosknum * sizeof(product)));
 
             read(connfd, &task, sizeof(int));
             while (task == 1)
             {
-                kioskInfo = readTaskNum(connfd, kioskInfo, kioskInfo, kiosknum);
+                readFile(kfd, kioskInfo, kiosknum);
+                printInfo(kioskInfo, kiosknum);
+                kioskInfo = readTaskNum(connfd, kfd, kioskInfo, kioskInfo, kiosknum);
                 read(connfd, &task, sizeof(int));
             }
 
@@ -123,13 +160,13 @@ void operateServer(product *kioskInfo, int kiosknum)
     }
 }
 
-int main()
+int main(int argc, char *argv[])
 {
     int num;
     product *kioskInfo;
 
     kioskInfo = kioskInformation(kioskInfo, &num);
-    operateServer(kioskInfo, num);
+    operateServer(kioskInfo, num, argv[1]);
 
     free(kioskInfo);
 
