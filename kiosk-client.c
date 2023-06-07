@@ -12,7 +12,7 @@
 #define DEFAULT_PROTOCOL 0
 #define MAXLINE 100
 
-//서버로부터 상품의 수와 키오스크 정보를 받아옴.
+// 서버로부터 상품의 수와 키오스크 정보를 받아옴.
 product *readKiosk(int cfd, product *kioskInfo, int *kiosknum)
 {
     read(cfd, kiosknum, sizeof(int));
@@ -24,7 +24,7 @@ product *readKiosk(int cfd, product *kioskInfo, int *kiosknum)
     return kioskInfo;
 }
 
-//수행할 작업번호 입력 받은 후 반환.
+// 수행할 작업번호 입력 받은 후 반환.
 int inputNum()
 {
     int task;
@@ -38,13 +38,16 @@ int inputNum()
     return task;
 }
 
-//구매할 상품의 정보를 입력 받고 서버에 전달 후 서버로부터 성공, 실패 여부와 키오스크 정보를 전달받음.
+// 구매할 상품의 정보를 입력 받고 서버에 전달 후 서버로부터 성공, 실패 여부와 키오스크 정보를 전달받음.
 void purchaseProduct(product *kioskInfo, int cfd, int kiosknum)
 {
-    purchase purArr[100];
-    int cost, index = 0;
+    purchase purArr[50];
+    int cost, index = 0, tmp;
     char c = 'Y';
     bool kioskErr;
+
+    read(cfd, kioskInfo, (kiosknum * sizeof(product)));
+    printInfo(kioskInfo, kiosknum);
 
     while (c != 'N')
     {
@@ -72,15 +75,17 @@ void purchaseProduct(product *kioskInfo, int cfd, int kiosknum)
     if (kioskErr == true)
     {
         printf("구매 수량 또는 지불 금액으로 인한 오류 발생\n");
+        printInfo(kioskInfo, kiosknum);
     }
     else
     {
         printf("구매 성공\n");
         read(cfd, kioskInfo, (kiosknum * sizeof(product)));
+        printInfo(kioskInfo, kiosknum);
     }
 }
 
-//전반적인 클라이언트 동작 관리.
+// 전반적인 클라이언트 동작 관리.
 void operateClient()
 {
     int cfd, result, kiosknum, task;
@@ -108,8 +113,6 @@ void operateClient()
 
     while (task == 1)
     {
-        read(cfd, kioskInfo, (kiosknum * sizeof(product)));
-        printInfo(kioskInfo, kiosknum);
         purchaseProduct(kioskInfo, cfd, kiosknum);
         task = inputNum();
         write(cfd, &task, sizeof(int));

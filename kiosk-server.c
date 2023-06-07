@@ -67,21 +67,39 @@ product *kioskInformation(product *kioskInfo, int *num)
 // 클라이언트로부터 구매할 상품의 정보를 받고, 구매처리를 한 후 성공, 실패 여부를 클라이언트에 전달.
 int readTaskNum(int cfd, int kfd, product *kioskInfo, int kiosknum)
 {
-    purchase *purInfo;
-    int index, clientCost, i, totalCost = 0;
+    purchase purInfo[50];
+    int index, clientCost, i, totalCost = 0, tmp;
+    int num, quantity, tmpCost;
     bool kioskErr = false;
+    struct flock lock;
+
+    // 파일 잠금
+    lock.l_type = F_WRLCK;
+    lock.l_whence = SEEK_SET;
+    lock.l_start = 0;
+    lock.l_len = 0;
+
+    if (fcntl(kfd, F_SETLKW, &lock) == -1)
+    {
+        perror("lock file error");
+        exit(1);
+    }
+
+    readFile(kfd, kioskInfo, kiosknum);
+    write(cfd, kioskInfo, (kiosknum * sizeof(product)));
+    printInfo(kioskInfo, kiosknum);
 
     read(cfd, &index, sizeof(int));
 
-    read(cfd, purInfo, (index * sizeof(purchase)));
+    read(cfd, &purInfo, (index * sizeof(purchase)));
 
     read(cfd, &clientCost, sizeof(int));
 
     for (i = 0; i < index; i++)
     {
-        int num = purInfo[i].num - 1;
-        int quantity = purInfo[i].quantity;
-        int tmpCost = kioskInfo[num].cost * quantity;
+        num = purInfo[i].num - 1;
+        quantity = purInfo[i].quantity;
+        tmpCost = kioskInfo[num].cost * quantity;
 
         if ((kioskInfo[num].quantity - quantity) >= 0 && (totalCost + tmpCost) <= clientCost)
         {
@@ -93,6 +111,8 @@ int readTaskNum(int cfd, int kfd, product *kioskInfo, int kiosknum)
             kioskErr = true;
             write(cfd, &kioskErr, sizeof(bool));
             readFile(kfd, kioskInfo, kiosknum);
+            lock.l_type = F_UNLCK;
+            fcntl(kfd, F_SETLK, &lock);
 
             return -1;
         }
@@ -103,6 +123,8 @@ int readTaskNum(int cfd, int kfd, product *kioskInfo, int kiosknum)
         kioskErr = true;
         write(cfd, &kioskErr, sizeof(bool));
         readFile(kfd, kioskInfo, kiosknum);
+        lock.l_type = F_UNLCK;
+        fcntl(kfd, F_SETLK, &lock);
 
         return -1;
     }
@@ -110,6 +132,8 @@ int readTaskNum(int cfd, int kfd, product *kioskInfo, int kiosknum)
     write(cfd, &kioskErr, sizeof(bool));
     write(cfd, kioskInfo, (kiosknum * sizeof(product)));
     writeFile(kfd, kioskInfo, kiosknum);
+    lock.l_type = F_UNLCK;
+    fcntl(kfd, F_SETLK, &lock);
 
     return 0;
 }
@@ -146,11 +170,9 @@ void operateServer(product *kioskInfo, int kiosknum, char *fileName)
             write(connfd, kioskInfo, (kiosknum * sizeof(product)));
 
             read(connfd, &task, sizeof(int));
+
             while (task == 1)
             {
-                readFile(kfd, kioskInfo, kiosknum);
-                write(connfd, kioskInfo, (kiosknum * sizeof(product)));
-                printInfo(kioskInfo, kiosknum);
                 readTaskNum(connfd, kfd, kioskInfo, kiosknum);
                 read(connfd, &task, sizeof(int));
             }
