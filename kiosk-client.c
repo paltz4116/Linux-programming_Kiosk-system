@@ -105,9 +105,14 @@ void operateClient()
     } while (result == -1);
     printf("연결 완료\n");
 
+    //서버와 연결이 시작되면 시간 제한 설정
+    signal(SIGALRM, endKiosk);
+    alarm(180);
+
     kioskInfo = readKiosk(cfd, kioskInfo, &kiosknum);
     printInfo(kioskInfo, kiosknum);
 
+    //수행할 작업을 입력 받음
     task = inputNum();
     write(cfd, &task, sizeof(int));
 

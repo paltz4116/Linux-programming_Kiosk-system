@@ -1,3 +1,4 @@
+//상품 정보
 typedef struct Product
 {
     char name[20];
@@ -5,6 +6,7 @@ typedef struct Product
     int quantity;
 } product;
 
+//구매 요청 정보
 typedef struct Purchase
 {
     int num;
@@ -22,4 +24,12 @@ void printInfo(product *kioskInfo, int num)
     {
         printf("%-4d %-7s %-7d %-7d\n", i + 1, kioskInfo[i].name, kioskInfo[i].cost, kioskInfo[i].quantity);
     }
+}
+
+//설정된 사용시간이되면 클라이언트 종료.
+void endKiosk(int signo){
+    printf("\n");
+    printf("키오스크 사용시간 3분 경과로 인해 종료됩니다.\n");
+
+    exit(0);
 }

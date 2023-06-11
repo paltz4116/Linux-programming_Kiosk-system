@@ -14,6 +14,7 @@
 #define DEFAULT_PROTOCOL 0
 #define MAXLINE 100
 
+//키오스크 정보를 저장할 파일을 생성.
 int createFile(int kfd, char *fileName)
 {
     if ((kfd = open(fileName, O_RDWR | O_CREAT | O_TRUNC, 0640)) == -1)
@@ -50,6 +51,7 @@ product *kioskInformation(product *kioskInfo, int *num)
     printf("설정할 상품의 개수를 입력해주세요: ");
     scanf("%d", num);
 
+    //입력 받은 상품 목록만큼 동적할당
     kioskInfo = (product *)malloc((*num) * sizeof(product));
 
     printf("%-7s %-7s %-7s\n", "이름", "가격", "수량");
@@ -79,6 +81,7 @@ int readTaskNum(int cfd, int kfd, product *kioskInfo, int kiosknum)
     lock.l_start = 0;
     lock.l_len = 0;
 
+    //구매처리 하기 전 파일잠금
     if (fcntl(kfd, F_SETLKW, &lock) == -1)
     {
         perror("lock file error");
@@ -95,12 +98,14 @@ int readTaskNum(int cfd, int kfd, product *kioskInfo, int kiosknum)
 
     read(cfd, &clientCost, sizeof(int));
 
+    //클라이언트로부터 받은 정보를 확인해 구매 처리
     for (i = 0; i < index; i++)
     {
         num = purInfo[i].num - 1;
         quantity = purInfo[i].quantity;
         tmpCost = kioskInfo[num].cost * quantity;
 
+        //요청 받은 구매 가격과 수량을 확인해서 구매 성공 실패 여부 확인
         if ((kioskInfo[num].quantity - quantity) >= 0 && (totalCost + tmpCost) <= clientCost)
         {
             kioskInfo[num].quantity = kioskInfo[num].quantity - quantity;
@@ -129,6 +134,7 @@ int readTaskNum(int cfd, int kfd, product *kioskInfo, int kiosknum)
         return -1;
     }
 
+    //구매 처리 성공 시 파일에 저장
     write(cfd, &kioskErr, sizeof(bool));
     write(cfd, kioskInfo, (kiosknum * sizeof(product)));
     writeFile(kfd, kioskInfo, kiosknum);
@@ -165,10 +171,15 @@ void operateServer(product *kioskInfo, int kiosknum, char *fileName)
         connfd = accept(listenfd, (struct sockaddr *)&clientAddr, &clientlen);
         if (fork() == 0)
         {
+            //각 프로세스에 시간 제한 설정
+            signal(SIGALRM, endKiosk);
+            alarm(180);
+
             readFile(kfd, kioskInfo, kiosknum);
             write(connfd, &kiosknum, sizeof(kiosknum));
             write(connfd, kioskInfo, (kiosknum * sizeof(product)));
 
+            //클라이언트로부터 수행할 작업 정보를 받아옴
             read(connfd, &task, sizeof(int));
 
             while (task == 1)
